@@ -3,7 +3,7 @@ param (
     [string]$OutputDir = (Get-Location)
 )
 # Function that scrapes information from the ZTIGather log files
-function Find-MachineInfo {
+function Get-ZTIGatherInfo {
     param (
         [Parameter(Mandatory = $true)]
         [string]$LogDir_base
@@ -82,7 +82,7 @@ function Get-DeploymentTime {
     return $start_date, $start_time, $end_date, $end_time, $elapsed_time
 }
 
-function Parse-BDDlog {
+function Get-BDDMetrics {
     param (
         [Parameter(Mandatory = $true)]
         [System.Object]$Local_ParentString,
@@ -91,7 +91,7 @@ function Parse-BDDlog {
         [Parameter(Mandatory = $true)]
         [System.Boolean]$Local_Success
     )
-        $Working_Table += Find-MachineInfo $Local_ParentString
+        $Working_Table += Get-ZTIGatherInfo $Local_ParentString
         if ($Local_Success) {
             $TimeObjs = Get-DeploymentTime $Content $true
         }
@@ -129,11 +129,11 @@ Get-ChildItem -Path "$WorkingDir" -Filter BDD.log -Recurse | ForEach-Object {
         $Content.PSParentPath
         if ( $Content -cmatch 'LTI deployment completed successfully') {
             $Success_Array += @{'success' = $true}
-            $Success_Array[-1] += Parse-BDDlog $ParentString $Content $true
+            $Success_Array[-1] += Get-BDDMetrics $ParentString $Content $true
         }
         else {
             $Error_Array += @{'success' = $false}
-            $Error_Array[-1] += Parse-BDDlog $ParentString $Content $false
+            $Error_Array[-1] += Get-BDDMetrics $ParentString $Content $false
         }
     }
 }
@@ -147,7 +147,8 @@ $Full_Array += $Error_Array | ForEach-Object { $_ }
 $output_format = @{N = "Date"; e = { $_.start_date } }, @{N = "Start Time"; e = { $_.start_time } }, @{N = "Elapsed Time"; e = { $_.elapsed_time } },
 @{N = "Serial Number"; e = { $_.serialnumber } }, @{N = "Model"; E = { $_.model } }, @{N = "User Name"; e = { $_.Username } },
 @{N = "Task Sequence Error Code"; e = { $_.failure } }, @{N = "Task Sequence Number"; e = { $_.tasksequence_number } }, @{N = "WIM File"; e = { $_.wim_file } },
-@{N = "Failed Application"; e = { $_.application } }, @{N = "Application Error Code"; e = { $_.application_error_code } }
+@{N = "Failed Application"; e = { $_.application } }, @{N = "Application Error Code"; e = { $_.application_error_code } },
+@{N = "DateTime"; e = { Get-Date ("{0} {1}" -f $_.start_date, $_.start_time) } }
 $output_success_format = $output_format + @{N = "Success"; e = { $_.success } }
 
 # Set output paths with cross plat folder structure
@@ -161,11 +162,16 @@ New-Item -ItemType Directory -Path "$JsonOutputDir" -ErrorAction SilentlyContinu
 $today = Get-Date -Format "%M-%d-%y"
 
 # Export information to CSV files with prettied up column headers
-$Success_Array | ForEach-Object { new-object psobject -Property $_ } | select-object -Property $output_format | Sort-Object -Property date, time | 
+$Success_Array | ForEach-Object { new-object psobject -Property $_ } | select-object -Property $output_format | Sort-Object -Property DateTime |
+Select-Object -ExcludeProperty DateTime | 
 Export-csv $(Join-Path -Path "$CSVOutputDir" -ChildPath "Successful_Deployments_$today.csv") -Encoding UTF8 -NoTypeInformation -Force
-$Error_Array | ForEach-Object { new-object psobject -Property $_ } | select-object -Property $output_format | Sort-Object -Property date, time | 
+
+$Error_Array | ForEach-Object { new-object psobject -Property $_ } | select-object -Property $output_format | Sort-Object -Property DateTime |
+Select-Object -ExcludeProperty DateTime |
 Export-csv $(Join-Path -Path "$CSVOutputDir" -ChildPath "Failed_Deployments_$today.csv") -Encoding UTF8 -NoTypeInformation -Force
-$Full_Array | ForEach-Object { new-object psobject -Property $_ } | select-object -Property $output_success_format | Sort-Object -Property date, time | 
+
+$Full_Array | ForEach-Object { new-object psobject -Property $_ } | select-object -Property $output_success_format | Sort-Object -Property DateTime |
+Select-Object -ExcludeProperty DateTime | 
 Export-csv $(Join-Path -Path "$CSVOutputDir" -ChildPath "Full_Deployment_list_$today.csv") -Encoding UTF8 -NoTypeInformation -Force
 
 # Export to Json
