@@ -82,6 +82,35 @@ function Get-DeploymentTime {
     return $start_date, $start_time, $end_date, $end_time, $elapsed_time
 }
 
+function Scrape-BDDlog {
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Object]$Local_ParentString,
+        [Parameter(Mandatory = $true)]
+        [System.Object]$Local_Content,
+        [Parameter(Mandatory = $true)]
+        [System.Object]$Working_Array
+    )
+        $Working_Array += ((Find-MachineInfo($Local_ParentString)))
+        $Working_Array[-1].Add('success', $true)
+        $Local_Content -cmatch "(?:UserID is now = )(?'username'[. | \w]+)(?:]LOG])" >$null
+        $Working_Array[$Working_Array.Length - 1].Add('username', $Matches['username'])
+        $Local_Content -cmatch "(?:Property TaskSequenceID is now = )(?'tasksequence_number'[\d]+)(?:]LOG])" >$null
+        $Working_Array[$Working_Array.Length - 1].Add('tasksequence_number', $Matches['tasksequence_number'])
+        $Local_Content -cmatch "(?:Application )(?'application'[.|\w|\d| |]+)(?: returned an unexpected return code: )(?'application_error_code'\d+)" >$null
+        $Working_Array[$Working_Array.Length - 1].Add('application', $Matches['application'])
+        $Working_Array[$Working_Array.Length - 1].Add('application_error_code', $Matches['application_error_code'])
+        $Local_Content -cmatch "(?:InstallFromPath:.*)(?:\\)(?'wim_file'[\d|\w\|_]+.wim)(?:\]LOG\])" >$null
+        $Working_Array[$Working_Array.Length - 1].Add('wim_file', $Matches['wim_file'])
+        #Call Get-DeploymentTime function and assign values to the array
+        $TimeObjs = Get-DeploymentTime $Local_Content $true
+        $Working_Array[-1].Add("start_date", $TimeObjs[0])
+        $Working_Array[-1].Add("start_time", $TimeObjs[1])
+        $Working_Array[-1].Add("end_date", $TimeObjs[2])
+        $Working_Array[-1].Add("end_time", $TimeObjs[3])
+        $Working_Array[-1].Add("elapsed_time", $TimeObjs[4].TrimStart('-'))
+}
+
 # Initialize Array Objects
 $Success_Array = @()
 $Error_Array = @()
@@ -93,24 +122,7 @@ Get-ChildItem -Path "$WorkingDir" -Filter BDD.log -Recurse | ForEach-Object {
         $ParentString = $Content.PSParentPath
         $Content.PSParentPath
         if ( $Content -cmatch 'LTI deployment completed successfully') {
-            $Success_Array += ((Find-MachineInfo($ParentString)))
-            $Success_Array[-1].Add('success', $true)
-            $Content -cmatch "(?:UserID is now = )(?'username'[. | \w]+)(?:]LOG])" >$null
-            $Success_Array[$Success_Array.Length - 1].Add('username', $Matches['username'])
-            $Content -cmatch "(?:Property TaskSequenceID is now = )(?'tasksequence_number'[\d]+)(?:]LOG])" >$null
-            $Success_Array[$Success_Array.Length - 1].Add('tasksequence_number', $Matches['tasksequence_number'])
-            $Content -cmatch "(?:Application )(?'application'[.|\w|\d| |]+)(?: returned an unexpected return code: )(?'application_error_code'\d+)" >$null
-            $Success_Array[$Success_Array.Length - 1].Add('application', $Matches['application'])
-            $Success_Array[$Success_Array.Length - 1].Add('application_error_code', $Matches['application_error_code'])
-            $Content -cmatch "(?:InstallFromPath:.*)(?:\\)(?'wim_file'[\d|\w\|_]+.wim)(?:\]LOG\])" >$null
-            $Success_Array[$Success_Array.Length - 1].Add('wim_file', $Matches['wim_file'])
-            #Call Get-DeploymentTime function and assign values to the array
-            $TimeObjs = Get-DeploymentTime $Content $true
-            $Success_Array[-1].Add("start_date", $TimeObjs[0])
-            $Success_Array[-1].Add("start_time", $TimeObjs[1])
-            $Success_Array[-1].Add("end_date", $TimeObjs[2])
-            $Success_Array[-1].Add("end_time", $TimeObjs[3])
-            $Success_Array[-1].Add("elapsed_time", $TimeObjs[4].TrimStart('-'))
+            Scrape-BDDlog $ParentString $Content $Success_Array
         }
         else {
             $Error_Array += ((Find-MachineInfo($ParentString)))
