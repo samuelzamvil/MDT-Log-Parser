@@ -82,33 +82,39 @@ function Get-DeploymentTime {
     return $start_date, $start_time, $end_date, $end_time, $elapsed_time
 }
 
-function Scrape-BDDlog {
+function Parse-BDDlog {
     param (
         [Parameter(Mandatory = $true)]
         [System.Object]$Local_ParentString,
         [Parameter(Mandatory = $true)]
         [System.Object]$Local_Content,
         [Parameter(Mandatory = $true)]
-        [System.Object]$Working_Array
+        [System.Boolean]$Local_Success
     )
-        $Working_Array += ((Find-MachineInfo($Local_ParentString)))
-        $Working_Array[-1].Add('success', $true)
+        $Working_Table += Find-MachineInfo $Local_ParentString
+        if ($Local_Success) {
+            $TimeObjs = Get-DeploymentTime $Content $true
+        }
+        elseif (-not($Local_Success)) {
+            $Local_Content -cmatch '<!\[LOG\[FAILURE \( (?''failure''\d+) \)' >$null
+            $Working_Table.Add('failure', $Matches['failure'])
+            $TimeObjs = Get-DeploymentTime $Content $false
+        }
         $Local_Content -cmatch "(?:UserID is now = )(?'username'[. | \w]+)(?:]LOG])" >$null
-        $Working_Array[$Working_Array.Length - 1].Add('username', $Matches['username'])
+        $Working_Table.Add('username', $Matches['username'])
         $Local_Content -cmatch "(?:Property TaskSequenceID is now = )(?'tasksequence_number'[\d]+)(?:]LOG])" >$null
-        $Working_Array[$Working_Array.Length - 1].Add('tasksequence_number', $Matches['tasksequence_number'])
+        $Working_Table.Add('tasksequence_number', $Matches['tasksequence_number'])
         $Local_Content -cmatch "(?:Application )(?'application'[.|\w|\d| |]+)(?: returned an unexpected return code: )(?'application_error_code'\d+)" >$null
-        $Working_Array[$Working_Array.Length - 1].Add('application', $Matches['application'])
-        $Working_Array[$Working_Array.Length - 1].Add('application_error_code', $Matches['application_error_code'])
+        $Working_Table.Add('application', $Matches['application'])
+        $Working_Table.Add('application_error_code', $Matches['application_error_code'])
         $Local_Content -cmatch "(?:InstallFromPath:.*)(?:\\)(?'wim_file'[\d|\w\|_]+.wim)(?:\]LOG\])" >$null
-        $Working_Array[$Working_Array.Length - 1].Add('wim_file', $Matches['wim_file'])
-        #Call Get-DeploymentTime function and assign values to the array
-        $TimeObjs = Get-DeploymentTime $Local_Content $true
-        $Working_Array[-1].Add("start_date", $TimeObjs[0])
-        $Working_Array[-1].Add("start_time", $TimeObjs[1])
-        $Working_Array[-1].Add("end_date", $TimeObjs[2])
-        $Working_Array[-1].Add("end_time", $TimeObjs[3])
-        $Working_Array[-1].Add("elapsed_time", $TimeObjs[4].TrimStart('-'))
+        $Working_Table.Add('wim_file', $Matches['wim_file'])
+        $Working_Table.Add("start_date", $TimeObjs[0])
+        $Working_Table.Add("start_time", $TimeObjs[1])
+        $Working_Table.Add("end_date", $TimeObjs[2])
+        $Working_Table.Add("end_time", $TimeObjs[3])
+        $Working_Table.Add("elapsed_time", $TimeObjs[4].TrimStart('-'))
+        return $Working_Table
 }
 
 # Initialize Array Objects
@@ -122,28 +128,12 @@ Get-ChildItem -Path "$WorkingDir" -Filter BDD.log -Recurse | ForEach-Object {
         $ParentString = $Content.PSParentPath
         $Content.PSParentPath
         if ( $Content -cmatch 'LTI deployment completed successfully') {
-            Scrape-BDDlog $ParentString $Content $Success_Array
+            $Success_Array += @{'success' = $true}
+            $Success_Array[-1] += Parse-BDDlog $ParentString $Content $true
         }
         else {
-            $Error_Array += ((Find-MachineInfo($ParentString)))
-            $Error_Array[-1].Add('success', $false)
-            $Content -cmatch '<!\[LOG\[FAILURE \( (?''failure''\d+) \)' >$null
-            $Error_Array[$Error_Array.Length - 1].Add('failure', $Matches['failure'])
-            $Content -cmatch "(?:UserID is now = )(?'username'[. | \w]+)(?:]LOG])" >$null
-            $Error_Array[$Error_Array.Length - 1].Add('username', $Matches['username'])
-            $Content -cmatch "(?:Property TaskSequenceID is now = )(?'tasksequence_number'[\d]+)(?:]LOG])" >$null
-            $Error_Array[$Error_Array.Length - 1].Add('tasksequence_number', $Matches['tasksequence_number'])
-            $Content -cmatch "(?:Application )(?'application'[.|\w|\d| |]+)(?: returned an unexpected return code: )(?'application_error_code'\d+)" >$null
-            $Error_Array[$Error_Array.Length - 1].Add('application', $Matches['application'])
-            $Error_Array[$Error_Array.Length - 1].Add('application_error_code', $Matches['application_error_code'])
-            $Content -cmatch "(?:InstallFromPath:.*)(?:\\)(?'wim_file'[\d|\w\|_]+.wim)(?:\]LOG\])" >$null
-            $Error_Array[$Error_Array.Length - 1].Add('wim_file', $Matches['wim_file'])
-            $TimeObjs = Get-DeploymentTime $Content $false
-            $Error_Array[-1].Add("start_date", $TimeObjs[0])
-            $Error_Array[-1].Add("start_time", $TimeObjs[1])
-            $Error_Array[-1].Add("end_date", $TimeObjs[2])
-            $Error_Array[-1].Add("end_time", $TimeObjs[3])
-            $Error_Array[-1].Add("elapsed_time", $TimeObjs[4])
+            $Error_Array += @{'success' = $false}
+            $Error_Array[-1] += Parse-BDDlog $ParentString $Content $false
         }
     }
 }
