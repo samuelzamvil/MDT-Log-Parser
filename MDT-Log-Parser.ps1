@@ -1,5 +1,39 @@
+<#
+.SYNOPSIS
+Tool to extract relevant information from logs created by MDT.
+
+Author: Samuel Zamvil
+Development Env: Mac OS X 10.14.6 and Windows 10 1909
+Version: Powershell Core 6.2
+Date: 1/23/20
+
+.DESCRIPTION
+Options for MDT logging is limited so I build this tool to make it easy to gather metrics for reporting and to identify issues with MDT.
+
+.PARAMETER LogWorkingDir
+Specifies the directory of MDT log(s)
+
+.PARAMETER OutputDir
+Specifiest the directory to output the data tables in CSV and Json format. Script root is default.
+
+.INPUTS
+MDT Logs root directory
+Desired output directory
+
+.OUTPUTS
+Data tables in CSV and JSON Format
+
+.LINK
+https://github.com/samuelzamvil/MDT-Log-Parser
+
+.EXAMPLE
+PS> MDT-Log-Parser.ps1 D:\DeploymentShare\Logs\ C:\MDT-Metrics\
+
+In this example the script will go through the collection of logs at D:\DeploymentShare\Logs\ and output the logs to C:\MDT-Metrics\.
+#>
 param (
-    [string]$WorkingDir,
+    [Parameter(Mandatory = $true)]
+    [string]$LogWorkingDir,
     [string]$OutputDir = (Get-Location)
 )
 # Function that scrapes information from the ZTIGather log files
@@ -122,7 +156,7 @@ $Success_Array = @()
 $Error_Array = @()
 
 # Bring the raw text into the shell and use regular expressions to pull relevant data and use conditional regex to evaluate which array to add information to
-Get-ChildItem -Path "$WorkingDir" -Filter BDD.log -Recurse | ForEach-Object {
+Get-ChildItem -Path "$LogWorkingDir" -Filter BDD.log -Recurse | ForEach-Object {
     if ($_.Length -gt 0) {
         $Content = Get-Content $_.FullName -Raw
         $ParentString = $Content.PSParentPath
