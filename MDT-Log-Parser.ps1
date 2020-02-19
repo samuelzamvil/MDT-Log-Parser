@@ -134,6 +134,8 @@ function Get-BDDMetrics {
             $Working_Table.Add('failure', $Matches['failure'])
             $TimeObjs = Get-DeploymentTime $Content $false
         }
+        $Local_Content -cmatch "(?:OSDComputerName is now = )(?'computername'[\d|a-z|A-Z|-]*)(?:\])" >$null
+        $Working_Table.Add('computername', $Matches['computername'])
         $Local_Content -cmatch "(?:UserID is now = )(?'username'[. | \w]+)(?:]LOG])" >$null
         $Working_Table.Add('username', $Matches['username'])
         $Local_Content -cmatch "(?:Property TaskSequenceID is now = )(?'tasksequence_number'[\d]+)(?:]LOG])" >$null
@@ -179,7 +181,7 @@ $Full_Array += $Error_Array | ForEach-Object { $_ }
 
 # Create format strings
 $output_format = @{N = "Date"; e = { $_.start_date } }, @{N = "Start Time"; e = { $_.start_time } }, @{N = "Elapsed Time"; e = { $_.elapsed_time } },
-@{N = "Serial Number"; e = { $_.serialnumber } }, @{N = "Model"; E = { $_.model } }, @{N = "User Name"; e = { $_.Username } },
+@{N = "Serial Number"; e = { $_.serialnumber } }, @{N = "Model"; E = { $_.model } }, @{N = "User Name"; e = { $_.Username } }, @{N = "Computer Name"; e = { $_.computername } },
 @{N = "Task Sequence Error Code"; e = { $_.failure } }, @{N = "Task Sequence Number"; e = { $_.tasksequence_number } }, @{N = "WIM File"; e = { $_.wim_file } },
 @{N = "Failed Application"; e = { $_.application } }, @{N = "Application Error Code"; e = { $_.application_error_code } },
 @{N = "DateTime"; e = { Get-Date ("{0} {1}" -f $_.start_date, $_.start_time) } }
